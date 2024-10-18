@@ -1,4 +1,4 @@
-library flutter_speed_dial;
+library;
 
 import 'package:flutter/material.dart';
 import 'global_key_extension.dart';
@@ -14,7 +14,7 @@ class BackgroundOverlay extends AnimatedWidget {
   final String? tooltip;
 
   const BackgroundOverlay({
-    Key? key,
+    super.key,
     this.onTap,
     required this.shape,
     required Animation<double> animation,
@@ -24,22 +24,20 @@ class BackgroundOverlay extends AnimatedWidget {
     required this.tooltip,
     this.color = Colors.white,
     this.opacity = 0.7,
-  }) : super(key: key, listenable: animation);
+  }) : super(listenable: animation);
 
   @override
   Widget build(BuildContext context) {
     final Animation<double> animation = listenable as Animation<double>;
     return ColorFiltered(
-        colorFilter: ColorFilter.mode(
-            color.withOpacity(opacity * animation.value), BlendMode.srcOut),
+        colorFilter: ColorFilter.mode(color.withOpacity(opacity * animation.value), BlendMode.srcOut),
         child: Stack(
           fit: StackFit.expand,
           children: [
             GestureDetector(
               onTap: closeManually ? null : onTap,
               child: Container(
-                decoration: BoxDecoration(
-                    color: color, backgroundBlendMode: BlendMode.dstOut),
+                decoration: BoxDecoration(color: color, backgroundBlendMode: BlendMode.dstOut),
               ),
             ),
             Positioned(
@@ -56,9 +54,7 @@ class BackgroundOverlay extends AnimatedWidget {
                         width: dialKey.globalPaintBounds?.size.width,
                         height: dialKey.globalPaintBounds?.size.height,
                         decoration: ShapeDecoration(
-                          shape: shape == const CircleBorder()
-                              ? const StadiumBorder()
-                              : shape,
+                          shape: shape == const CircleBorder() ? const StadiumBorder() : shape,
                           color: Colors.white,
                         ),
                       ),

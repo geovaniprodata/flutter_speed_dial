@@ -29,7 +29,7 @@ class AnimatedChild extends AnimatedWidget {
   final EdgeInsets childPadding;
 
   const AnimatedChild({
-    Key? key,
+    super.key,
     this.btnKey,
     required Animation<double> animation,
     this.index,
@@ -54,7 +54,7 @@ class AnimatedChild extends AnimatedWidget {
     this.heroTag,
     required this.childMargin,
     required this.childPadding,
-  }) : super(key: key, listenable: animation);
+  }) : super(listenable: animation);
 
   @override
   Widget build(BuildContext context) {
@@ -86,15 +86,12 @@ class AnimatedChild extends AnimatedWidget {
         padding: childMargin,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: labelBackgroundColor ??
-                (dark ? Colors.grey[800] : Colors.grey[50]),
+            color: labelBackgroundColor ?? (dark ? Colors.grey[800] : Colors.grey[50]),
             borderRadius: borderRadius,
             boxShadow: labelShadow ??
                 [
                   BoxShadow(
-                    color: dark
-                        ? Colors.grey[900]!.withOpacity(0.7)
-                        : Colors.grey.withOpacity(0.7),
+                    color: dark ? Colors.grey[900]!.withOpacity(0.7) : Colors.grey.withOpacity(0.7),
                     offset: const Offset(0.8, 0.8),
                     blurRadius: 2.4,
                   ),
@@ -106,8 +103,7 @@ class AnimatedChild extends AnimatedWidget {
             clipBehavior: Clip.hardEdge,
             child: InkWell(
               onTap: performAction,
-              onLongPress:
-                  onLongPress == null ? null : () => performAction(true),
+              onLongPress: onLongPress == null ? null : () => performAction(true),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   vertical: 5.0,
@@ -127,10 +123,8 @@ class AnimatedChild extends AnimatedWidget {
           key: btnKey,
           heroTag: heroTag,
           onPressed: performAction,
-          backgroundColor:
-              backgroundColor ?? (dark ? Colors.grey[800] : Colors.grey[50]),
-          foregroundColor:
-              foregroundColor ?? (dark ? Colors.white : Colors.black),
+          backgroundColor: backgroundColor ?? (dark ? Colors.grey[800] : Colors.grey[50]),
+          foregroundColor: foregroundColor ?? (dark ? Colors.white : Colors.black),
           elevation: elevation ?? 6.0,
           shape: shape,
           child: child,
@@ -141,9 +135,7 @@ class AnimatedChild extends AnimatedWidget {
         ScaleTransition(
           scale: animation,
           child: Container(
-            padding: (child == null)
-                ? const EdgeInsets.symmetric(vertical: 8)
-                : null,
+            padding: (child == null) ? const EdgeInsets.symmetric(vertical: 8) : null,
             key: (child == null) ? btnKey : null,
             child: buildLabel(),
           ),
@@ -165,23 +157,18 @@ class AnimatedChild extends AnimatedWidget {
     ];
 
     Widget buildColumnOrRow(bool isColumn,
-        {CrossAxisAlignment? crossAxisAlignment,
-        MainAxisAlignment? mainAxisAlignment,
-        required List<Widget> children,
-        MainAxisSize? mainAxisSize}) {
+        {CrossAxisAlignment? crossAxisAlignment, MainAxisAlignment? mainAxisAlignment, required List<Widget> children, MainAxisSize? mainAxisSize}) {
       return isColumn
           ? Column(
               mainAxisSize: mainAxisSize ?? MainAxisSize.max,
               mainAxisAlignment: mainAxisAlignment ?? MainAxisAlignment.start,
-              crossAxisAlignment:
-                  crossAxisAlignment ?? CrossAxisAlignment.center,
+              crossAxisAlignment: crossAxisAlignment ?? CrossAxisAlignment.center,
               children: children,
             )
           : Row(
               mainAxisSize: mainAxisSize ?? MainAxisSize.max,
               mainAxisAlignment: mainAxisAlignment ?? MainAxisAlignment.start,
-              crossAxisAlignment:
-                  crossAxisAlignment ?? CrossAxisAlignment.center,
+              crossAxisAlignment: crossAxisAlignment ?? CrossAxisAlignment.center,
               children: children,
             );
     }
@@ -192,8 +179,7 @@ class AnimatedChild extends AnimatedWidget {
             child: buildColumnOrRow(
               useColumn,
               mainAxisSize: MainAxisSize.min,
-              children:
-                  switchLabelPosition ? children.reversed.toList() : children,
+              children: switchLabelPosition ? children.reversed.toList() : children,
             ),
           )
         : Container();

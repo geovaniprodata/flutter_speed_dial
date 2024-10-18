@@ -19,7 +19,7 @@ class AnimatedFloatingButton extends StatefulWidget {
   final bool mini;
 
   const AnimatedFloatingButton({
-    Key? key,
+    super.key,
     this.visible = true,
     this.callback,
     this.label,
@@ -36,14 +36,13 @@ class AnimatedFloatingButton extends StatefulWidget {
     this.shape = const CircleBorder(),
     this.curve = Curves.fastOutSlowIn,
     this.onLongPress,
-  }) : super(key: key);
+  });
 
   @override
   State createState() => _AnimatedFloatingButtonState();
 }
 
-class _AnimatedFloatingButtonState extends State<AnimatedFloatingButton>
-    with TickerProviderStateMixin {
+class _AnimatedFloatingButtonState extends State<AnimatedFloatingButton> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return widget.dialRoot == null
@@ -61,12 +60,8 @@ class _AnimatedFloatingButtonState extends State<AnimatedFloatingButton>
                 child: widget.label != null
                     ? FloatingActionButton.extended(
                         icon: widget.visible ? widget.child : null,
-                        label: widget.visible
-                            ? widget.label!
-                            : const SizedBox.shrink(),
-                        shape: widget.shape is CircleBorder
-                            ? const StadiumBorder()
-                            : widget.shape,
+                        label: widget.visible ? widget.label! : const SizedBox.shrink(),
+                        shape: widget.shape is CircleBorder ? const StadiumBorder() : widget.shape,
                         backgroundColor: widget.backgroundColor,
                         foregroundColor: widget.foregroundColor,
                         onPressed: widget.callback,
@@ -94,9 +89,7 @@ class _AnimatedFloatingButtonState extends State<AnimatedFloatingButton>
             duration: const Duration(milliseconds: 150),
             curve: widget.curve,
             child: Container(
-              child: widget.visible
-                  ? widget.dialRoot
-                  : const SizedBox(height: 0, width: 0),
+              child: widget.visible ? widget.dialRoot : const SizedBox(height: 0, width: 0),
             ),
           );
   }

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_speed_dial/src/speed_dial_controller.dart';
 
 import 'animated_child.dart';
 import 'global_key_extension.dart';
@@ -10,8 +11,7 @@ import 'background_overlay.dart';
 import 'speed_dial_child.dart';
 import 'speed_dial_direction.dart';
 
-typedef AsyncChildrenBuilder = Future<List<SpeedDialChild>> Function(
-    BuildContext context);
+typedef AsyncChildrenBuilder = Future<List<SpeedDialChild>> Function(BuildContext context);
 
 /// Builds the Speed Dial
 class SpeedDial extends StatefulWidget {
@@ -124,9 +124,6 @@ class SpeedDial extends StatefulWidget {
   /// If true overlay is rendered.
   final bool renderOverlay;
 
-  /// Open or close the dial via a notification
-  final ValueNotifier<bool>? openCloseDial;
-
   /// The duration of the animation or the duration till which animation is played.
   final Duration animationDuration;
 
@@ -150,8 +147,7 @@ class SpeedDial extends StatefulWidget {
   /// ignore backgroundColor, foregroundColor or any other property
   /// that was specific to FAB before like onPress, you will have to provide
   /// it again to your dialRoot button.
-  final Widget Function(
-      BuildContext context, bool open, VoidCallback toggleChildren)? dialRoot;
+  final Widget Function(BuildContext context, DialState state, VoidCallback toggleChildren)? dialRoot;
 
   /// This is the child of the FAB, if specified it will ignore icon, activeIcon.
   final Widget? child;
@@ -168,8 +164,11 @@ class SpeedDial extends StatefulWidget {
   /// Use mini fab for the speed dial
   final bool mini;
 
+  /// SpeedDialController used to control the state of Dial, open, close etc...
+  final SpeedDialController? controller;
+
   const SpeedDial({
-    Key? key,
+    super.key,
     this.children = const [],
     this.visible = true,
     this.backgroundColor,
@@ -210,7 +209,6 @@ class SpeedDial extends StatefulWidget {
     this.curve = Curves.fastOutSlowIn,
     this.onPress,
     this.animationDuration = const Duration(milliseconds: 150),
-    this.openCloseDial,
     this.isOpenOnStart = false,
     this.closeDialOnPop = true,
     this.childMargin = const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
@@ -218,28 +216,31 @@ class SpeedDial extends StatefulWidget {
     this.spaceBetweenChildren,
     this.spacing,
     this.animationCurve,
-  }) : super(key: key);
+    this.controller,
+  });
 
   @override
   State createState() => _SpeedDialState();
 }
 
-class _SpeedDialState extends State<SpeedDial>
-    with SingleTickerProviderStateMixin {
+class _SpeedDialState extends State<SpeedDial> with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     duration: widget.animationDuration,
     vsync: this,
   );
-  bool _open = false;
   OverlayEntry? overlayEntry;
   OverlayEntry? backgroundOverlay;
   final LayerLink _layerLink = LayerLink();
   final dialKey = GlobalKey<State<StatefulWidget>>();
+  SpeedDialController? controller;
 
   @override
   void initState() {
     super.initState();
-    widget.openCloseDial?.addListener(_onOpenCloseDial);
+
+    controller = widget.controller ?? SpeedDialController();
+
+    widget.controller!.addListener(_onOpenCloseDial);
     Future.delayed(Duration.zero, () async {
       if (mounted && widget.isOpenOnStart) _toggleChildren();
     });
@@ -257,7 +258,7 @@ class _SpeedDialState extends State<SpeedDial>
       backgroundOverlay!.dispose();
     }
     _controller.dispose();
-    widget.openCloseDial?.removeListener(_onOpenCloseDial);
+    widget.controller!.removeListener(_onOpenCloseDial);
     super.dispose();
   }
 
@@ -267,22 +268,21 @@ class _SpeedDialState extends State<SpeedDial>
       _controller.duration = widget.animationDuration;
     }
 
-    widget.openCloseDial?.removeListener(_onOpenCloseDial);
-    widget.openCloseDial?.addListener(_onOpenCloseDial);
+    widget.controller!.removeListener(_onOpenCloseDial);
+    widget.controller!.addListener(_onOpenCloseDial);
     super.didUpdateWidget(oldWidget);
   }
 
   void _checkChildren() {
     if (widget.children.length > 5) {
-      debugPrint(
-          'Warning ! You are using more than 5 children, which is not compliant with Material design specs.');
+      debugPrint('Warning ! You are using more than 5 children, which is not compliant with Material design specs.');
     }
   }
 
   void _onOpenCloseDial() {
-    final show = widget.openCloseDial?.value;
+    final show = widget.controller!.state;
     if (!mounted) return;
-    if (_open != show) {
+    if (show == DialState.closed) {
       _toggleChildren();
     }
   }
@@ -290,7 +290,7 @@ class _SpeedDialState extends State<SpeedDial>
   void _toggleChildren() async {
     if (!mounted) return;
 
-    final opening = !_open;
+    final opening = widget.controller!.state == DialState.closed;
     if (opening && widget.onOpenBuilder != null) {
       widget.children.clear();
       final widgets = await widget.onOpenBuilder!(context);
@@ -300,7 +300,7 @@ class _SpeedDialState extends State<SpeedDial>
 
     if (widget.children.isNotEmpty) {
       toggleOverlay();
-      widget.openCloseDial?.value = opening;
+      widget.controller!.open();
       opening ? widget.onOpen?.call() : widget.onClose?.call();
     } else {
       widget.onOpen?.call();
@@ -308,12 +308,10 @@ class _SpeedDialState extends State<SpeedDial>
   }
 
   toggleOverlay() {
-    if (_open) {
+    if (widget.controller!.state == DialState.opened) {
       _controller.reverse().whenComplete(() {
         overlayEntry?.remove();
-        if (widget.renderOverlay &&
-            backgroundOverlay != null &&
-            backgroundOverlay!.mounted) {
+        if (widget.renderOverlay && backgroundOverlay != null && backgroundOverlay!.mounted) {
           backgroundOverlay?.remove();
         }
       });
@@ -346,8 +344,7 @@ class _SpeedDialState extends State<SpeedDial>
               onTap: _toggleChildren,
               // (_open && !widget.closeManually) ? _toggleChildren : null,
               animation: _controller,
-              color: widget.overlayColor ??
-                  (dark ? Colors.grey[900] : Colors.white)!,
+              color: widget.overlayColor ?? (dark ? Colors.grey[900] : Colors.white)!,
               opacity: widget.overlayOpacity,
             );
           },
@@ -362,9 +359,8 @@ class _SpeedDialState extends State<SpeedDial>
     }
 
     if (!mounted) return;
-    setState(() {
-      _open = !_open;
-    });
+
+    widget.controller!.changeState();
   }
 
   Widget _renderButton() {
@@ -386,18 +382,12 @@ class _SpeedDialState extends State<SpeedDial>
         : AnimatedBuilder(
             animation: _controller,
             builder: (BuildContext context, _) => Transform.rotate(
-              angle:
-                  (widget.activeChild != null || widget.activeIcon != null) &&
-                          widget.useRotationAnimation
-                      ? _controller.value * widget.animationAngle
-                      : 0,
+              angle: (widget.activeChild != null || widget.activeIcon != null) && widget.useRotationAnimation ? _controller.value * widget.animationAngle : 0,
               child: AnimatedSwitcher(
                   duration: widget.animationDuration,
                   child: (widget.child != null && _controller.value < 0.4)
                       ? widget.child
-                      : (widget.activeIcon == null &&
-                                  widget.activeChild == null ||
-                              _controller.value < 0.4)
+                      : (widget.activeIcon == null && widget.activeChild == null || _controller.value < 0.4)
                           ? Container(
                               decoration: BoxDecoration(
                                 shape: widget.gradientBoxShape,
@@ -415,8 +405,7 @@ class _SpeedDialState extends State<SpeedDial>
                               ),
                             )
                           : Transform.rotate(
-                              angle:
-                                  widget.useRotationAnimation ? -pi * 1 / 2 : 0,
+                              angle: widget.useRotationAnimation ? -pi * 1 / 2 : 0,
                               child: widget.activeChild ??
                                   Container(
                                     decoration: BoxDecoration(
@@ -443,17 +432,11 @@ class _SpeedDialState extends State<SpeedDial>
                 opacity: animation,
                 child: child,
               ),
-      child: (!_open || widget.activeLabel == null)
-          ? widget.label
-          : widget.activeLabel,
+      child: (widget.controller!.state == DialState.closed || widget.activeLabel == null) ? widget.label : widget.activeLabel,
     );
 
-    final backgroundColorTween = ColorTween(
-        begin: widget.backgroundColor,
-        end: widget.activeBackgroundColor ?? widget.backgroundColor);
-    final foregroundColorTween = ColorTween(
-        begin: widget.foregroundColor,
-        end: widget.activeForegroundColor ?? widget.foregroundColor);
+    final backgroundColorTween = ColorTween(begin: widget.backgroundColor, end: widget.activeBackgroundColor ?? widget.backgroundColor);
+    final foregroundColorTween = ColorTween(begin: widget.foregroundColor, end: widget.activeForegroundColor ?? widget.foregroundColor);
 
     var animatedFloatingButton = AnimatedBuilder(
       animation: _controller,
@@ -464,20 +447,12 @@ class _SpeedDialState extends State<SpeedDial>
             visible: widget.visible,
             tooltip: widget.tooltip,
             mini: widget.mini,
-            dialRoot: widget.dialRoot != null
-                ? widget.dialRoot!(context, _open, _toggleChildren)
-                : null,
-            backgroundColor: widget.backgroundColor != null
-                ? backgroundColorTween.lerp(_controller.value)
-                : null,
-            foregroundColor: widget.foregroundColor != null
-                ? foregroundColorTween.lerp(_controller.value)
-                : null,
+            dialRoot: widget.dialRoot != null ? widget.dialRoot!(context, widget.controller!.state, _toggleChildren) : null,
+            backgroundColor: widget.backgroundColor != null ? backgroundColorTween.lerp(_controller.value) : null,
+            foregroundColor: widget.foregroundColor != null ? foregroundColorTween.lerp(_controller.value) : null,
             elevation: widget.elevation,
             onLongPress: _toggleChildren,
-            callback: (_open || widget.onPress == null)
-                ? _toggleChildren
-                : widget.onPress,
+            callback: (widget.controller!.state == DialState.opened || widget.onPress == null) ? _toggleChildren : widget.onPress,
             size: widget.buttonSize,
             label: widget.label != null ? label : null,
             heroTag: widget.heroTag,
@@ -492,15 +467,14 @@ class _SpeedDialState extends State<SpeedDial>
   @override
   Widget build(BuildContext context) {
     return (kIsWeb || !Platform.isIOS) && widget.closeDialOnPop
-        ? WillPopScope(
-            child: _renderButton(),
-            onWillPop: () async {
-              if (_open) {
+        ? PopScope(
+            canPop: widget.controller!.state == DialState.closed,
+            onPopInvokedWithResult: (pop, result) async {
+              if (widget.controller!.state == DialState.opened) {
                 _toggleChildren();
-                return false;
               }
-              return true;
             },
+            child: _renderButton(),
           )
         : _renderButton();
   }
@@ -508,14 +482,13 @@ class _SpeedDialState extends State<SpeedDial>
 
 class _ChildrensOverlay extends StatelessWidget {
   const _ChildrensOverlay({
-    Key? key,
     required this.widget,
     required this.layerLink,
     required this.dialKey,
     required this.controller,
     required this.toggleChildren,
     this.animationCurve,
-  }) : super(key: key);
+  });
 
   final SpeedDial widget;
   final GlobalKey<State<StatefulWidget>> dialKey;
@@ -568,9 +541,7 @@ class _ChildrensOverlay extends StatelessWidget {
               if (!widget.closeManually) toggleChildren();
             },
             shape: child.shape,
-            heroTag: widget.heroTag != null
-                ? '${widget.heroTag}-child-$index'
-                : null,
+            heroTag: widget.heroTag != null ? '${widget.heroTag}-child-$index' : null,
             childMargin: widget.childMargin,
             childPadding: widget.childPadding,
             child: child.child,
@@ -603,30 +574,18 @@ class _ChildrensOverlay extends StatelessWidget {
                           : Alignment.center,
           offset: widget.direction.isDown
               ? Offset(
-                  (widget.switchLabelPosition ||
-                              dialKey.globalPaintBounds == null
-                          ? 0
-                          : dialKey.globalPaintBounds!.size.width) +
+                  (widget.switchLabelPosition || dialKey.globalPaintBounds == null ? 0 : dialKey.globalPaintBounds!.size.width) +
                       max(widget.childrenButtonSize.height - 56, 0) / 2,
                   dialKey.globalPaintBounds!.size.height)
               : widget.direction.isUp
                   ? Offset(
-                      (widget.switchLabelPosition ||
-                                  dialKey.globalPaintBounds == null
-                              ? 0
-                              : dialKey.globalPaintBounds!.size.width) +
+                      (widget.switchLabelPosition || dialKey.globalPaintBounds == null ? 0 : dialKey.globalPaintBounds!.size.width) +
                           max(widget.childrenButtonSize.width - 56, 0) / 2,
                       0)
                   : widget.direction.isLeft
-                      ? Offset(
-                          -10.0,
-                          dialKey.globalPaintBounds == null
-                              ? 0
-                              : dialKey.globalPaintBounds!.size.height / 2)
-                      : widget.direction.isRight &&
-                              dialKey.globalPaintBounds != null
-                          ? Offset(dialKey.globalPaintBounds!.size.width + 12,
-                              dialKey.globalPaintBounds!.size.height / 2)
+                      ? Offset(-10.0, dialKey.globalPaintBounds == null ? 0 : dialKey.globalPaintBounds!.size.height / 2)
+                      : widget.direction.isRight && dialKey.globalPaintBounds != null
+                          ? Offset(dialKey.globalPaintBounds!.size.width + 12, dialKey.globalPaintBounds!.size.height / 2)
                           : const Offset(-10.0, 0.0),
           link: layerLink,
           showWhenUnlinked: false,
@@ -634,9 +593,7 @@ class _ChildrensOverlay extends StatelessWidget {
             type: MaterialType.transparency,
             child: Container(
               padding: EdgeInsets.symmetric(
-                horizontal: widget.direction.isUp || widget.direction.isDown
-                    ? max(widget.buttonSize.width - 56, 0) / 2
-                    : 0,
+                horizontal: widget.direction.isUp || widget.direction.isDown ? max(widget.buttonSize.width - 56, 0) / 2 : 0,
               ),
               margin: widget.spacing != null
                   ? EdgeInsets.fromLTRB(
@@ -648,13 +605,9 @@ class _ChildrensOverlay extends StatelessWidget {
                   : null,
               child: _buildColumnOrRow(
                 widget.direction.isUp || widget.direction.isDown,
-                crossAxisAlignment: widget.switchLabelPosition
-                    ? CrossAxisAlignment.start
-                    : CrossAxisAlignment.end,
+                crossAxisAlignment: widget.switchLabelPosition ? CrossAxisAlignment.start : CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
-                children: widget.direction.isDown || widget.direction.isRight
-                    ? _getChildrenList().reversed.toList()
-                    : _getChildrenList(),
+                children: widget.direction.isDown || widget.direction.isRight ? _getChildrenList().reversed.toList() : _getChildrenList(),
               ),
             ),
           ),
@@ -665,10 +618,7 @@ class _ChildrensOverlay extends StatelessWidget {
 }
 
 Widget _buildColumnOrRow(bool isColumn,
-    {CrossAxisAlignment? crossAxisAlignment,
-    MainAxisAlignment? mainAxisAlignment,
-    required List<Widget> children,
-    MainAxisSize? mainAxisSize}) {
+    {CrossAxisAlignment? crossAxisAlignment, MainAxisAlignment? mainAxisAlignment, required List<Widget> children, MainAxisSize? mainAxisSize}) {
   return isColumn
       ? Column(
           mainAxisSize: mainAxisSize ?? MainAxisSize.max,
