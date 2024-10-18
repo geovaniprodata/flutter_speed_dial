@@ -148,7 +148,7 @@ class SpeedDial extends StatefulWidget {
   /// ignore backgroundColor, foregroundColor or any other property
   /// that was specific to FAB before like onPress, you will have to provide
   /// it again to your dialRoot button.
-  final Widget Function(BuildContext context, DialState state, VoidCallback toggleChildren)? dialRoot;
+  final Widget Function(BuildContext context, DialState state, void Function() toggleChildren)? dialRoot;
 
   /// This is the child of the FAB, if specified it will ignore icon, activeIcon.
   final Widget? child;
@@ -243,7 +243,7 @@ class _SpeedDialState extends State<SpeedDial> with SingleTickerProviderStateMix
 
     dialController!.addListener(_onOpenCloseDial);
     Future.delayed(Duration.zero, () async {
-      if (mounted && widget.isOpenOnStart) _toggleChildren();
+      if (mounted && widget.isOpenOnStart) _toggleChildren(dialController!);
     });
     _checkChildren();
   }
@@ -284,14 +284,14 @@ class _SpeedDialState extends State<SpeedDial> with SingleTickerProviderStateMix
     final show = dialController!.state;
     if (!mounted) return;
     if (show == DialState.closed) {
-      _toggleChildren();
+      _toggleChildren(dialController!);
     }
   }
 
-  void _toggleChildren() async {
+  void _toggleChildren(SpeedDialController dial) async {
     if (!mounted) return;
 
-    final opening = dialController!.state == DialState.closed;
+    final opening = dial.state == DialState.closed;
     if (opening && widget.onOpenBuilder != null) {
       widget.children.clear();
       final widgets = await widget.onOpenBuilder!(context);
@@ -300,16 +300,16 @@ class _SpeedDialState extends State<SpeedDial> with SingleTickerProviderStateMix
     }
 
     if (widget.children.isNotEmpty) {
-      toggleOverlay();
-      dialController!.open();
+      toggleOverlay(dial);
+      dial.open();
       opening ? widget.onOpen?.call() : widget.onClose?.call();
     } else {
       widget.onOpen?.call();
     }
   }
 
-  toggleOverlay() {
-    if (dialController!.state == DialState.opened) {
+  toggleOverlay(SpeedDialController dial) {
+    if (dial.state == DialState.opened) {
       _controller.reverse().whenComplete(() {
         overlayEntry?.remove();
         if (widget.renderOverlay && backgroundOverlay != null && backgroundOverlay!.mounted) {
@@ -328,7 +328,7 @@ class _SpeedDialState extends State<SpeedDial> with SingleTickerProviderStateMix
           dialKey: dialKey,
           layerLink: _layerLink,
           controller: _controller,
-          toggleChildren: _toggleChildren,
+          toggleChildren: () => _toggleChildren(dial),
           animationCurve: widget.animationCurve,
         ),
       );
@@ -342,7 +342,7 @@ class _SpeedDialState extends State<SpeedDial> with SingleTickerProviderStateMix
               closeManually: widget.closeManually,
               tooltip: widget.tooltip,
               shape: widget.shape,
-              onTap: _toggleChildren,
+              onTap: () => _toggleChildren(dial),
               // (_open && !widget.closeManually) ? _toggleChildren : null,
               animation: _controller,
               color: widget.overlayColor ?? (dark ? Colors.grey[900] : Colors.white)!,
@@ -361,10 +361,10 @@ class _SpeedDialState extends State<SpeedDial> with SingleTickerProviderStateMix
 
     if (!mounted) return;
 
-    dialController!.changeState();
+    dial.changeState();
   }
 
-  Widget _renderButton() {
+  Widget _renderButton(SpeedDialController dial) {
     var child = widget.animatedIcon != null
         ? Container(
             decoration: BoxDecoration(
@@ -426,19 +426,15 @@ class _SpeedDialState extends State<SpeedDial> with SingleTickerProviderStateMix
             ),
           );
 
-    var label = ChangeNotifierBuilder(
-        value: dialController!,
-        builder: (context, value) {
-          return AnimatedSwitcher(
-            duration: widget.animationDuration,
-            transitionBuilder: widget.labelTransitionBuilder ??
-                (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: child,
-                    ),
-            child: ((value.state == DialState.closed || widget.activeLabel == null) ? widget.label : widget.activeLabel),
-          );
-        });
+    var label = AnimatedSwitcher(
+      duration: widget.animationDuration,
+      transitionBuilder: widget.labelTransitionBuilder ??
+          (child, animation) => FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
+      child: ((dial.state == DialState.closed || widget.activeLabel == null) ? widget.label : widget.activeLabel),
+    );
 
     final backgroundColorTween = ColorTween(begin: widget.backgroundColor, end: widget.activeBackgroundColor ?? widget.backgroundColor);
     final foregroundColorTween = ColorTween(begin: widget.foregroundColor, end: widget.activeForegroundColor ?? widget.foregroundColor);
@@ -446,28 +442,25 @@ class _SpeedDialState extends State<SpeedDial> with SingleTickerProviderStateMix
     var animatedFloatingButton = AnimatedBuilder(
       animation: _controller,
       builder: (context, ch) => CompositedTransformTarget(
-          link: _layerLink,
-          key: dialKey,
-          child: ChangeNotifierBuilder(
-              value: dialController!,
-              builder: (context, value) {
-                return AnimatedFloatingButton(
-                  visible: widget.visible,
-                  tooltip: widget.tooltip,
-                  mini: widget.mini,
-                  dialRoot: widget.dialRoot != null ? widget.dialRoot!(context, value.state, _toggleChildren) : null,
-                  backgroundColor: widget.backgroundColor != null ? backgroundColorTween.lerp(_controller.value) : null,
-                  foregroundColor: widget.foregroundColor != null ? foregroundColorTween.lerp(_controller.value) : null,
-                  elevation: widget.elevation,
-                  onLongPress: _toggleChildren,
-                  callback: (value.state == DialState.opened || widget.onPress == null) ? _toggleChildren : widget.onPress,
-                  size: widget.buttonSize,
-                  label: widget.label != null ? label : null,
-                  heroTag: widget.heroTag,
-                  shape: widget.shape,
-                  child: child,
-                );
-              })),
+        link: _layerLink,
+        key: dialKey,
+        child: AnimatedFloatingButton(
+          visible: widget.visible,
+          tooltip: widget.tooltip,
+          mini: widget.mini,
+          dialRoot: widget.dialRoot != null ? widget.dialRoot!(context, dial.state, () => _toggleChildren(dial)) : null,
+          backgroundColor: widget.backgroundColor != null ? backgroundColorTween.lerp(_controller.value) : null,
+          foregroundColor: widget.foregroundColor != null ? foregroundColorTween.lerp(_controller.value) : null,
+          elevation: widget.elevation,
+          onLongPress: () => _toggleChildren(dial),
+          callback: (dial.state == DialState.opened || widget.onPress == null) ? () => _toggleChildren(dial) : widget.onPress,
+          size: widget.buttonSize,
+          label: widget.label != null ? label : null,
+          heroTag: widget.heroTag,
+          shape: widget.shape,
+          child: child,
+        ),
+      ),
     );
 
     return animatedFloatingButton;
@@ -475,21 +468,23 @@ class _SpeedDialState extends State<SpeedDial> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
-    return (kIsWeb || !Platform.isIOS) && widget.closeDialOnPop
-        ? ChangeNotifierBuilder(
-            value: dialController!,
-            builder: (context, value) {
-              return PopScope(
-                canPop: value.state == DialState.closed,
-                onPopInvokedWithResult: (pop, result) async {
-                  if (value.state == DialState.opened) {
-                    _toggleChildren();
-                  }
-                },
-                child: _renderButton(),
-              );
-            })
-        : _renderButton();
+    return ChangeNotifierBuilder(
+        value: dialController!,
+        builder: (context, value) {
+          if ((kIsWeb || !Platform.isIOS) && widget.closeDialOnPop) {
+            return PopScope(
+              canPop: value.state == DialState.closed,
+              onPopInvokedWithResult: (pop, result) async {
+                if (value.state == DialState.opened) {
+                  _toggleChildren(value);
+                }
+              },
+              child: _renderButton(value),
+            );
+          } else {
+            return _renderButton(value);
+          }
+        });
   }
 }
 
